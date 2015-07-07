@@ -1,0 +1,115 @@
+\documentclass[conference,a4paper]{IEEEtran}
+\IEEEoverridecommandlockouts
+
+\usepackage[utf8]{inputenc}
+
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage{amssymb}
+
+\title{White Paper: Open Source Deconvolution Components implemented
+using ImageJ2/Imglib2 framework}
+
+\author{
+	\IEEEauthorblockN{
+		Brian Northan\IEEEauthorrefmark{1},
+	}
+
+	\IEEEauthorblockA{\IEEEauthorrefmark{1} True North Intelligent Algorithms, Guilderland, New York}
+
+	\thanks{\textit{}}
+}
+
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+There is a need for improved deconvolution algorithms for ImageJ.
+Current solutions all have drawbacks.  DeconvolutionLab implements a
+variety of algorithms, however it is closed source which makes it
+difficult to extend.  Other solutions including Iterative Deconvolution
+(Dougherty) and Parallel Iterative Deconvolution (Wendykier) are based
+on the ImageJ1 framework.  This White Paper describes a strategy to
+implement deconvolution into the next generation ImageJ2 platform.
+Preliminary results are presented.  The submitted results were generated
+using the Richardson-Lucy Algorithm with total variation regularization, non-circulant
+edge handling, and vector extrapolation acceleration.  Non-overlapping
+convolution and correlation operators were ported to Java based on a
+preexisting Matlab implementation.  The Total Variation algorithm was
+ported to Java based on a preexisting open source Python implementation.
+All code is open source and has been placed in publically available git
+repositories.  
+\end{abstract}
+
+
+\section{Introduction and Notations}
+
+Deconvolution is a complicated task that requires many steps beyond just algorithm selection.   Images may need to be extended to deal with boundary conditions.  The PSF must be generated (or preprocessed if a measured PSF is used).  Regularization parameters and stopping criteria need to be selected.  One possible approach to the problem is to combine components from different open source code bases.  Multiple code bases allow more flexibility.  For example, one code base may have a deconvolution algorithm that is very robust to noise, while another code base may have efficient Fast Fourier Transform (FFT).  For the deconvolution challenge, the Imglib2 code base \cite{imglib2012} was used for FFTs and extension of images.  The related Imagej2 code base \cite{imagej2013} was used for file IO, scripting, and visualization of results.  The IOCBio \cite{laasmaa2011} code base was used as a template for the total variation regularization deconvolution algorithm.  And finally Matlab scripts provided by the course organizers \cite{vonesch2013} were used as a template for non-overlapping forward and adjunct operators. 
+
+In this document, the following matrix/vector notations are used:
+\begin{itemize}
+	\item $\mathbf{i}$ is the observed image;	
+	\item $\mathbf{o}$ is the true representation of the object;
+	\item $\mathbf{h}$ is the point spread function (PSF);
+	\item $\mathbf{o}_k$ is an estimate of $\mathbf{o}$ obtained after $k$ iterations of the algorithm.
+\end{itemize}
+
+The source code used to generate these results can be found on Github at https://github.com/bnorthan/.
+
+\section{Algorithm}
+
+The algorithm that was used was Richardson Lucy Total Variation originally presented by Dey \cite{dey2006}.  An open source version of the algorithm was implemented by Laasmaa \cite{laasmaa2011} in the Python language.  This implementation was ported to Java so that it could be integrated into the ImageJ2 framework.  Richardson Lucy Total Variation is an iterative procedure that consists of the repeated application of the following update rule:
+\begin{multline} \label{eq:tv_update}
+	\mathbf{o}_{k+1}(s) = \left\{\left[\frac{i(s)}{(o_{k}*h)(s)}\right]*h(-s)\right\}\\\times\frac{{o}_{k}(s)}{1-\lambda_{TV}div\left({\frac{\nabla_{ok}(s)}{|\nabla_{ok}(s)|}}\right)}
+\end{multline}
+
+\section{Cost Function}
+
+The Richardson-Lucy algorithm is a maximum-likelihood algorithm that is based on a Poisson noise model.  The Richardson-Lucy with Total Variation extends the Richardson-Lucy algorithm and minimizes a functional composed of an energy term \(\mathbf{J_{1}}\) and a regularization term \(\mathbf{J_{reg}}\).  The regularization term is based on Total Variation as in \cite{rudin1992}.
+
+\begin{equation} \label{eq:tv}
+{J_{reg}(o)} = \lambda_{TV}\sum_{s}|\nabla{o(s)}|
+\end{equation}
+
+The total functional to be minimized is:
+
+\begin{multline} \label{eq:tv_functional}
+	{J_{1}(o)} + {J_{reg}(o)} = \sum_{s}(-i(s)\log[(o*h)(s)]+\\
+(o*h)(s))+\lambda_{TV}\sum_{s}|\nabla{o(s)}|
+\end{multline}
+
+The update rule in equation~\ref{eq:tv_update} is derived by minimizing equation~\ref{eq:tv_functional} using the EM procedure. 
+
+
+\section{Choice of the parameters}
+
+For Richardson-Lucy with Total Variation, two parameters need to be chosen: the regularization parameter $\lambda$ and the number of iterations $k$.  To deal with boundary conditions, the image can be extended.  The size of the boundaries in each dimension ($b_x$, $b_y$, and $b_z$) and a strategy to assign values to boundary voxels need to be chosen.  The boundary conditions were assigned based on the forward model used to generate the test images \cite{vonesch2013}.  For a measured image $\mathbf{i}$ of size $[K_{x}, K_{y}, K_{z}]$ and PSF $\mathbf{h}$ of size $[L_{x}, L_{y}, L_{z}]$ the object space $\mathbf{i}$ is potentially of size $[N_{x}, N_{y}, N_{z}]=[K_{x}+L_{x}-1, K_{y}+L_{y}-1, K_{z}+L_{z}-1]$.  The object space is larger then the image space which allows the possibility of reconstruction outside the observation window.   In this work the object first guess was a constant value.  At each iteration the estimate was normalized by the matrix $\gamma$ following the procedure in the matlab script $RLdeblur.m$ that was provided with \cite{vonesch2013}.
+
+One strategy to choose the parameters is to run the algorithm using various settings and then choose the result that is most pleasing visually.  The weakness in this strategy is that it becomes impractical to test all permutations of multiple parameters and that human perception may not correlate with quantitative criteria.  The following parameters were chosen:
+
+$ k=1000, \lambda=0.0005, b_x=64, b_y=64, b_z=64 $
+
+The boundary values of the image and PSF were assigned using a constant value of 0.  The size of the boundary was assigned to avoid overlap in the convolution and adjunct calculation \cite{vonesch2013}.  Note that the regularization parameter $\lambda$ is smaller than that used in \cite{dey2006} ($\lambda=0.002$).  When testing with the value $\lambda=0.002$, the result appeared artificial (over smoothed). Since the images were generated by simulation the optimal result may be perceived as artificial by a human. \newpage Future work should be done to compare the $\lambda$ chosen by human judgment vs. the optimal $\lambda$ determined by quantitative criteria. This could be done when the ground truth images become available. 
+
+\begin{thebibliography}{}
+
+\bibitem{imglib2012} T.\ Pietzsch, S.\ Preibisch, P.\ Tomancak and S.\ Saalfeld, ``ImgLib2 - Generic image processing in Java'', Bioinformatics, Vol.\  28(22), pp. 3009-3011 (2012).
+
+\bibitem{imagej2013} C.T.\ Rueden, J.\ Schindelin, B.E.\ Dezonia, A.R.\ Grislis, M.C.\ Hiner and K.W.\ Eliceiri (2013). ``Open Source BioImage Informatics: Tools for Interoperability. Microscopy and Microanalysis'', Vol.\ 19 (Suppl. 2) , pp 754-755 (2013). 
+
+\bibitem{dey2006} N.\ Dey, L.\ Blank-Feraud, C.\ Zimmer, P.\ Roux, Z.\ Kam, J-C,\ Olivo-Marin, J.\ Zerubia, ``Richardson-Lucy Algorithm with Total Varation Regularization for 3D Confocal Microscope Deconvolution'', Microscopy Research and Technique, Vol.\ 69(1), pp. 260-266 (2006).
+\bibitem{laasmaa2011} M.\ Laasmaa, M.\ Vendelin, P.\ Peterson, ``Application of regularized Richardson-Lucy algorithm for deconvolution of confocal microscopy images'',  Journal of Microscopy, Vol.\ 243(2), pp. 124-140 (2011).
+\bibitem{rudin1992} L.\ Rudin, S.\ Osher, E.\ Fatemi, ``Nonlinear total variation noise removal algorithm'',  Physica D., Vol.\ 60(2), pp. 259-266 (1992).
+\bibitem{vonesch2013} C.\ Vonesch (2013), ``Second International Challenge on 3D Deconvolution Microscopy'', http://bigwww.epfl.ch/deconvolution/challenge.
+\bibitem{biggs1997} D.\ Biggs, M.\ Andrews, ``Acceleration of iterative
+image restoration algorithms'',  Applied Optics, Vol.\ 36(8), pp.
+1766-75 (1997).
+\bibitem{Remmele2009} S.\ Remmele, J.\ Hesser, ``Vector
+Extrapolation-Based Acceleration of Regularized Richardson Lucy Image
+Deblurring'',  Informatik Actuell, pp. 400-404 (2009).
+
+\end{thebibliography}
+
+\end{document}
