@@ -29,7 +29,7 @@ using ImageJ2/Imglib2 framework}
 There is a need for improved deconvolution algorithms for ImageJ.
 Current solutions all have drawbacks.  DeconvolutionLab implements a
 variety of algorithms, however it is closed source which makes it
-difficult to extend.  Other solutions including Iterative Deconvolution
+difficult to extend.  Other solutions, including Iterative Deconvolution
 (Dougherty) and Parallel Iterative Deconvolution (Wendykier) are based
 on the ImageJ1 framework.  This White Paper describes a strategy to
 implement deconvolution into the next generation ImageJ2 platform.
@@ -46,7 +46,18 @@ repositories.
 
 \section{Introduction and Notations}
 
-Deconvolution is a complicated task that requires many steps beyond just algorithm selection.   Images may need to be extended to deal with boundary conditions.  The PSF must be generated (or preprocessed if a measured PSF is used).  Regularization parameters and stopping criteria need to be selected.  One possible approach to the problem is to combine components from different open source code bases.  Multiple code bases allow more flexibility.  For example, one code base may have a deconvolution algorithm that is very robust to noise, while another code base may have efficient Fast Fourier Transform (FFT).  For the deconvolution challenge, the Imglib2 code base \cite{imglib2012} was used for FFTs and extension of images.  The related Imagej2 code base \cite{imagej2013} was used for file IO, scripting, and visualization of results.  The IOCBio \cite{laasmaa2011} code base was used as a template for the total variation regularization deconvolution algorithm.  And finally Matlab scripts provided by the course organizers \cite{vonesch2013} were used as a template for non-overlapping forward and adjunct operators. 
+Deconvolution is a complicated task that requires many steps beyond just algorithm selection.  These include:   
+
+\begin{enumerate} 
+
+\item Boundary conditions: In Convolution and Deconvolution calculations are performed on a neighbourhood of pixels.  A strategy must be devised to perform calculations for pixels near the boundaries.  
+\item Regularization
+\item Acceleration
+\item Stopping Criteria
+\item PSF
+\end{enumerate}
+
+Images may need to be extended to deal with boundary conditions.  The PSF must be generated (or preprocessed if a measured PSF is used).  Regularization parameters and stopping criteria need to be selected.  One possible approach to the problem is to combine components from different open source code bases.  Multiple code bases allow more flexibility.  For example, one code base may have a deconvolution algorithm that is very robust to noise, while another code base may have efficient Fast Fourier Transform (FFT).  For the deconvolution challenge, the Imglib2 code base \cite{imglib2012} was used for FFTs and extension of images.  The related Imagej2 code base \cite{imagej2013} was used for file IO, scripting, and visualization of results.  The IOCBio \cite{laasmaa2011} code base was used as a template for the total variation regularization deconvolution algorithm.  And finally Matlab scripts provided by the course organizers \cite{vonesch2013} were used as a template for non-overlapping forward and adjunct operators. 
 
 In this document, the following matrix/vector notations are used:
 \begin{itemize}
